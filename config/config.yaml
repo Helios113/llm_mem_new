@@ -1,0 +1,67 @@
+model:
+  name: "EleutherAI/pythia-125m"
+  tokenizer: "EleutherAI/pythia-125m"
+  instruction_token: False
+
+lora:
+  r: 8
+  alpha: 32
+  dropout: 0.1
+  target_modules: null
+  bias: "none"
+
+train_dataset:
+  name: "medpaca"
+  files: "/nfs-share/pa511/llm_memorisation/datasets_our/medical_dataset/deduplicated_medical_meadow_flashcards_train.json"
+  split: "train"
+  text_field: "text"
+
+validation_dataset:
+  name: "medpaca"
+  files: "/nfs-share/pa511/llm_memorisation/datasets_our/medical_dataset/deduplicated_medical_meadow_flashcards_non_member.json"
+  split: "train"
+  text_field: "text"
+
+training:
+  per_device_train_batch_size: 8
+  logging_dir: "./logs"
+  logging_steps: 10
+  max_seq_length: 2048
+  max_steps: 30
+  evaluation_strategy: "steps"
+  eval_on_start: True
+  eval_steps: 5 # Evaluate every 10 steps
+  report_to: "none"
+  save_strategy: "no"
+  dataset_text_field: "text"
+  warmup_ratio: 0.1
+
+evaluation:
+  output_dir: "./results"
+  per_device_eval_batch_size: 8
+
+wandb:
+  project: "federated-flwr"
+  wandb_config:
+    model_name: ${model.name}
+    tokenizer: ${model.tokenizer}
+    instruction_token: ${model.instruction_token}
+    lora_r: ${lora.r}
+    lora_alpha: ${lora.alpha}
+    lora_dropout: ${lora.dropout}
+    train_dataset_name: ${train_dataset.name}
+    validation_dataset_name: ${validation_dataset.name}
+    per_device_train_batch_size: ${training.per_device_train_batch_size}
+    max_seq_length: ${training.max_seq_length}
+    max_steps: ${training.max_steps}
+    evaluation_strategy: ${training.evaluation_strategy}
+    eval_steps: ${training.eval_steps}
+    num_clients: ${simulation.num_clients}
+    num_rounds: ${simulation.num_rounds}
+
+simulation:
+  num_clients: 4
+  num_rounds: 50
+  client_resources:
+    num_cpus: 8
+    num_gpus: 1.0
