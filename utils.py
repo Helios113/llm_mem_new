@@ -14,7 +14,6 @@ import copy
 import os
 import json
 from rouge_score import rouge_scorer
-
 # Fix random seeds
 def set_seed(seed: int):
     random.seed(seed)
@@ -26,31 +25,37 @@ def set_seed(seed: int):
 set_seed(42)
 
 def gen_compute_metrics(tokenizer):
-    
-    def compute_metrics(eval_preds: EvalPrediction):
+    perplexity_results = []
+    rouge1_results = []
+    def compute_metrics(eval_preds: EvalPrediction, compute_result):
+        nonlocal perplexity_results
+        nonlocal rouge1_results
         # Get predictions and labels from EvalPrediction object
         predictions = eval_preds.predictions
         labels = eval_preds.label_ids
-
+        shift_logits = predictions[:, :-1, :].contiguous()
+        labels = labels[:, 1:].contiguous()
+        
         # Reshape if needed - predictions are [batch_size, seq_length, vocab_size]
-        if len(predictions.shape) == 3:
-            predictions = predictions.reshape(-1, predictions.shape[-1])
+        if len(shift_logits.shape) == 3:
+            shift_logits = shift_logits.reshape(-1, shift_logits.shape[-1])
             labels = labels.reshape(-1)
 
         # Convert to torch tensors
-        predictions = torch.tensor(predictions)
-        labels = torch.tensor(labels)
+        # predictions = torch.tensor(predictions)
+        # labels = torch.tensor(labels)
 
         # Calculate cross entropy loss
         loss_fct = torch.nn.CrossEntropyLoss()
-        loss = loss_fct(predictions, labels)
+        loss = loss_fct(shift_logits, labels)
 
         # Calculate perplexity as exp(loss)
         perplexity = torch.exp(loss)
         
-        pred_ids = predictions.argmax(dim=-1)
+        pred_ids = shift_logits.argmax(dim=-1)
         pred_ids[pred_ids == -100] = tokenizer.pad_token_id
         labels[labels == -100] = tokenizer.pad_token_id
+        
         # Decode predictions and labels into text
         decoded_preds = tokenizer.decode(pred_ids , skip_special_tokens=True)
         decoded_labels = tokenizer.decode(labels, skip_special_tokens=True)
@@ -58,6 +63,14 @@ def gen_compute_metrics(tokenizer):
         scorer = rouge_scorer.RougeScorer(["rouge1"], use_stemmer=True, tokenizer=tokenizer)
         
         scores = scorer.score(decoded_preds, decoded_labels)["rouge1"]
+        perplexity_results.append(perplexity.item())
+        rouge1_results.append(scores.fmeasure)
+        if compute_result:
+            perplexity_mean = np.mean(perplexity_results)
+            rouge1_mean = np.mean(rouge1_results)
+            perplexity_results = []
+            rouge1_results = []
+            return {"perplexity": perplexity_mean, "rouge1": rouge1_mean}
         return {"perplexity": perplexity.item(), "rouge1": scores.fmeasure}
     
     return compute_metrics

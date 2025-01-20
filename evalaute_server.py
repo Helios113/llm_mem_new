@@ -78,7 +78,7 @@ def get_evaluate_fn(cfg, tokenizer, collator, eval_data, lora_config):
             checkpoint_dir = os.path.join(cfg.output_dir, f"checkpoint-{server_round}")
             trainer.save_model(checkpoint_dir)
         # wandb.finish(0)
-        return trainer.state.log_history[-1]["eval_loss"], {"perplexity":trainer.state.log_history[-1]["eval_perplexity"]}
+        return trainer.state.log_history[-1]["eval_loss"], {"perplexity":trainer.state.log_history[-1]["eval_perplexity"], "rouge1": trainer.state.log_history[-1]["eval_rouge1"]}
 
     return evaluate
 

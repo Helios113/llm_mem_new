@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1
 
 #! specify node
-#SBATCH -w mauao
+#SBATCH -w ruapehu
 #SBATCH --output=slurm_out/%x.%j.ans
 #SBATCH --error=slurm_out/err_%x.%j.ans
 

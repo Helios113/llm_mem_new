@@ -16,8 +16,9 @@ from rouge_score import rouge_scorer
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 def gen_compute_metrics(tokenizer):
-    
-    def compute_metrics(eval_preds):
+    perplexity_results = []
+    rouge1_results = []
+    def compute_metrics(eval_preds, compute_result):
         # Get predictions and labels from EvalPrediction object
         predictions = eval_preds.predictions
         labels = eval_preds.label_ids
@@ -28,8 +29,10 @@ def gen_compute_metrics(tokenizer):
             labels = labels.reshape(-1)
 
         # Convert predictions and labels to PyTorch tensors
-        predictions = torch.tensor(predictions)
-        labels = torch.tensor(labels)
+        # predictions = torch.tensor(predictions)
+        predictions = predictions.clone().detach()
+        labels = labels.clone().detach()
+        # labels = torch.tensor(labels)
 
         # Calculate cross-entropy loss
         loss_fct = torch.nn.CrossEntropyLoss()
@@ -47,22 +50,15 @@ def gen_compute_metrics(tokenizer):
         # Decode predictions and labels into text
         decoded_preds = tokenizer.decode(pred_ids , skip_special_tokens=True)
         decoded_labels = tokenizer.decode(labels, skip_special_tokens=True)
-        # print("decoded preds",decoded_preds)
-        # print("decoded labels",decoded_labels)
-        # print("pred_ids",type(decoded_preds))
-        # print("pred_ids",type(decoded_labels))
-        # print("pred_ids",len(decoded_preds))
-        # print("pred_ids",len(decoded_labels))
-        # # Load ROUGE metric
-        # exit()
         scorer = rouge_scorer.RougeScorer(["rouge1"], use_stemmer=True, tokenizer=tokenizer)
         
         scores = scorer.score(decoded_preds, decoded_labels)["rouge1"]
-        print(scores)
-        # print(scores)
-        print(scores.fmeasure)
-        
+        perplexity_results.append(perplexity.item())
+        rouge1_results.append(scores.fmeasure)
+        if compute_result:
+            return {"perplexity": numpy.mean(perplexity_results), "rouge1": numpy.mean(rouge1_results)}
         return {"perplexity": perplexity.item(), "rouge1": scores.fmeasure}
+        
     
     return compute_metrics
 
@@ -87,6 +83,9 @@ training_args = SFTConfig(
     dataset_text_field="text",
     save_steps=10,
     logging_steps=2,
+    eval_steps=2,
+    eval_strategy="steps",
+    batch_eval_metrics=True,
     max_steps=4,
     report_to="none",
     per_device_train_batch_size=4,  # Reduce batch size
@@ -135,7 +134,6 @@ class GlobalStepCallback(TrainerCallback):
         cur_step = (self.current_round - 1) * self.steps_per_round + state.log_history[
             -1
         ]["step"]
-        print(cur_step)
         commit_dict = {}
         for i in state.log_history[-1]:
             if i.startswith("eval_"):
@@ -156,10 +154,11 @@ for i in range(1,4):
         model=model,
         args=training_args,
         train_dataset=val_set,
+        eval_dataset=val_set,
         data_collator=collator,
         processing_class = tokenizer,
         compute_metrics=gen_compute_metrics(tokenizer),
-        callbacks=[global_step_callback],
+        # callbacks=[global_step_callback],
     )   
             
     # print(torch.cuda.memory_summary(device=None, abbreviated=False))
