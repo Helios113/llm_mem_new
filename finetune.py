@@ -101,12 +101,17 @@ def start_flower_simulation(cfg: DictConfig):
     # Client app initialisation
     def client_fn(context: Context):
         partition_id = int(context.node_config["partition-id"])
+        print(f"Client {partition_id} started")
         train_data = fds.load_partition(partition_id, "train")
 
         # Split train_data into equal sections
         num_rounds = cfg.simulation.num_rounds
-        train_data_splits = [train_data.shard(num_shards=num_rounds, index=i) for i in range(num_rounds)]
-
+        total_steps = len(train_data)
+        num_unique_rounds = int(np.ceil(
+            num_rounds / cfg.simulation.eqivalent_cent_epochs
+        ))
+        print(f"Total dataset size: {total_steps}, num_unique_rounds: {num_unique_rounds}, eqivalent_cent_epochs: {cfg.simulation.eqivalent_cent_epochs}")
+        train_data_splits = [train_data.shard(num_shards=num_unique_rounds, index=i) for i in range(num_unique_rounds)]
         return HuggingFaceClient(
             config=cfg,
             tokenizer=tokenizer,

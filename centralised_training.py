@@ -84,7 +84,7 @@ def start_centralised_training(cfg: DictConfig):
             **OmegaConf.to_object(cfg.training)
         )
         global_step_callback = GlobalStepCallback(
-            current_round=0, steps_per_round=cfg.training.max_steps, client_id=f"{cfg.run_id}-centralised"
+            elapsed_steps=0, client_id=f"{cfg.run_id}-centralised"
         )
 
         trainer = SFTTrainer(

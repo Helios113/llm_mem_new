@@ -27,7 +27,7 @@ training:
   logging_dir: "./logs"
   logging_steps: 10
   max_seq_length: 2048
-  max_steps: 6082
+  num_train_epochs: 3
   evaluation_strategy: "steps"
   eval_on_start: True
   eval_steps: 30 # Evaluate every 10 steps
@@ -35,6 +35,9 @@ training:
   save_strategy: "no"
   dataset_text_field: "text"
   warmup_ratio: 0.1
+  batch_eval_metrics: True
+  learning_rate: 1e-3
+
 
 evaluation:
   output_dir: "./results"
@@ -52,8 +55,7 @@ wandb:
     train_dataset_name: ${train_dataset.name}
     validation_dataset_name: ${validation_dataset.name}
     per_device_train_batch_size: ${training.per_device_train_batch_size}
-    max_seq_length: ${training.max_seq_length}
-    max_steps: ${training.max_steps}
+    num_train_epochs: ${training.num_train_epochs}
     evaluation_strategy: ${training.evaluation_strategy}
     eval_steps: ${training.eval_steps}
     num_clients: ${simulation.num_clients}
@@ -66,4 +68,4 @@ simulation:
     num_cpus: 8
     num_gpus: 1.0
 
-run_id: "zvkbuzjv"
+run_id: "new"

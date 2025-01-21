@@ -59,7 +59,7 @@ def get_evaluate_fn(cfg, tokenizer, collator, eval_data, lora_config):
             )
             log(logging.INFO, "server round: {}".format(server_round))
             global_step_callback = GlobalStepCallback(
-                current_round=server_round+1, steps_per_round=cfg.training.max_steps, client_id=f"{cfg.run_id}-server", is_training=False
+                elapsed_steps=server_round, client_id=f"{cfg.run_id}-server", is_training=False
             )
 
             trainer = SFTTrainer(

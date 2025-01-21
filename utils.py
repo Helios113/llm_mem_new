@@ -75,16 +75,15 @@ def gen_compute_metrics(tokenizer):
     
     return compute_metrics
 class GlobalStepCallback(TrainerCallback):
-    def __init__(self, current_round, steps_per_round, client_id, is_training=True):
-        self.current_round = current_round
-        self.steps_per_round = steps_per_round
+    def __init__(self, elapsed_steps, client_id, is_training=True):
+        self.elapsed_steps = elapsed_steps
         self.client_id = client_id
         self.is_training = is_training
         self.log_data = {"train": [], "eval": []}
 
     def on_log(self, args, state, control, logs=None, **kwargs):
         # Accumulate logs in JSON structure
-        cur_step = (self.current_round - 1) * self.steps_per_round + state.log_history[-1]["step"]
+        cur_step = self.elapsed_steps + state.log_history[-1]["step"]
         if self.is_training and state.log_history[-1]["step"] == 0:
             cur_step += 1
         commit_dict = {}
@@ -96,11 +95,11 @@ class GlobalStepCallback(TrainerCallback):
                 key = "train/" + i
                 commit_dict[key] = state.log_history[-1][i]
         wandb.log(data=commit_dict, step=cur_step)
-        self.log_data["train"].append({"cur_step": (self.current_round - 1) * self.steps_per_round + state.log_history[-1]["step"], **commit_dict})
+        self.log_data["train"].append({"cur_step": self.elapsed_steps + state.log_history[-1]["step"], **commit_dict})
 
     def on_evaluate(self, args, state, control, logs=None, **kwargs):
         # Accumulate logs in JSON structure
-        cur_step = (self.current_round - 1) * self.steps_per_round + state.log_history[-1]["step"]
+        cur_step = self.elapsed_steps + state.log_history[-1]["step"]
         if self.is_training and state.log_history[-1]["step"] == 0:
             cur_step += 1
         commit_dict = {}
@@ -112,7 +111,7 @@ class GlobalStepCallback(TrainerCallback):
                 key = "eval/" + i
                 commit_dict[key] = state.log_history[-1][i]
         wandb.log(data=commit_dict, step=cur_step)
-        self.log_data["eval"].append({"cur_step": (self.current_round - 1) * self.steps_per_round + state.log_history[-1]["step"], **commit_dict})
+        self.log_data["eval"].append({"cur_step": self.elapsed_steps + state.log_history[-1]["step"], **commit_dict})
 
     def save_logs(self, log_dir):
         # Save accumulated logs to a JSON file

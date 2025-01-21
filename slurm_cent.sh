@@ -10,6 +10,6 @@
 
 
 #WANDB_MODE=disabled 
-HYDRA_FULL_ERROR=1 poetry run python finetune.py
+HYDRA_FULL_ERROR=1 poetry run python centralised_training.py
 # HYDRA_FULL_ERROR=1 poetry run python centralised_training.py
 

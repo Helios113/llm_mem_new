@@ -23,11 +23,11 @@ validation_dataset:
   text_field: "text"
 
 training:
-  per_device_train_batch_size: 8
+  per_device_train_batch_size: 2
   logging_dir: "./logs"
   logging_steps: 10
   max_seq_length: 2048
-  max_steps: 30
+  num_train_epochs: 1
   eval_strategy: "steps"
   eval_on_start: True
   eval_steps: 5 # Evaluate every 10 steps
@@ -36,6 +36,7 @@ training:
   dataset_text_field: "text"
   warmup_ratio: 0.1
   batch_eval_metrics: True
+  learning_rate: 1e-4
 
 evaluation:
   output_dir: "./results"
@@ -54,7 +55,7 @@ wandb:
     validation_dataset_name: ${validation_dataset.name}
     per_device_train_batch_size: ${training.per_device_train_batch_size}
     max_seq_length: ${training.max_seq_length}
-    max_steps: ${training.max_steps}
+    num_train_epochs: ${training.num_train_epochs}
     evaluation_strategy: ${training.eval_strategy}
     eval_steps: ${training.eval_steps}
     num_clients: ${simulation.num_clients}
@@ -62,7 +63,8 @@ wandb:
 
 simulation:
   num_clients: 4
-  num_rounds: 50
+  num_rounds: 26
+  eqivalent_cent_epochs: 12
   client_resources:
     num_cpus: 8
     num_gpus: 1.0
