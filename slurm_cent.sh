@@ -2,6 +2,7 @@
 #SBATCH -J LLM_finetune 
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
+#SBATCH --dependency=afterany:1657
 
 #! specify node
 #SBATCH -w mauao

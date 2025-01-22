@@ -23,23 +23,19 @@ validation_dataset:
   text_field: "text"
 
 training:
-  per_device_train_batch_size: 8
+  per_device_train_batch_size: 2
   logging_dir: "./logs"
   logging_steps: 10
   max_seq_length: 2048
-  max_steps: 75420
-  evaluation_strategy: "steps"
+  num_train_epochs: 1
+  eval_strategy: "epoch"
   eval_on_start: True
-  eval_steps: 1000 # Evaluate every 10 steps
   report_to: "none"
+  save_strategy: "no"
   dataset_text_field: "text"
+  warmup_ratio: 0.1
   batch_eval_metrics: True
-  learning_rate: 1e-3
-  save_strategy : "best"
-  load_best_model_at_end: True
-  save_total_limit: 2
-  metric_for_best_model: "eval_rouge1"
-
+  learning_rate: 1e-2
 
 evaluation:
   output_dir: "./results"
@@ -57,19 +53,18 @@ wandb:
     train_dataset_name: ${train_dataset.name}
     validation_dataset_name: ${validation_dataset.name}
     per_device_train_batch_size: ${training.per_device_train_batch_size}
-    max_steps: ${training.max_steps}
-    evaluation_strategy: ${training.evaluation_strategy}
-    eval_steps: ${training.eval_steps}
+    max_seq_length: ${training.max_seq_length}
+    num_train_epochs: ${training.num_train_epochs}
+    evaluation_strategy: ${training.eval_strategy}
     num_clients: ${simulation.num_clients}
     num_rounds: ${simulation.num_rounds}
 
 simulation:
   num_clients: 4
-  num_rounds: 50
+  num_rounds: 60 # allways multiple of eqivalent_cent_epochs
   warmup_ratio: 0.1
   cooloff_ratio: 0.1
+  eqivalent_cent_epochs: 20
   client_resources:
     num_cpus: 8
     num_gpus: 1.0
-
-run_id: "b0jg9cbd3"

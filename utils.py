@@ -14,6 +14,7 @@ import copy
 import os
 import json
 from rouge_score import rouge_scorer
+from sklearn.metrics import f1_score, precision_score, recall_score
 # Fix random seeds
 def set_seed(seed: int):
     random.seed(seed)
@@ -27,9 +28,15 @@ set_seed(42)
 def gen_compute_metrics(tokenizer):
     perplexity_results = []
     rouge1_results = []
+    f1_results = []
+    precision_results = []
+    recall_results = []
     def compute_metrics(eval_preds: EvalPrediction, compute_result):
         nonlocal perplexity_results
         nonlocal rouge1_results
+        nonlocal f1_results
+        nonlocal precision_results
+        nonlocal recall_results
         # Get predictions and labels from EvalPrediction object
         predictions = eval_preds.predictions
         labels = eval_preds.label_ids
@@ -63,15 +70,41 @@ def gen_compute_metrics(tokenizer):
         scorer = rouge_scorer.RougeScorer(["rouge1"], use_stemmer=True, tokenizer=tokenizer)
         
         scores = scorer.score(decoded_preds, decoded_labels)["rouge1"]
+        f1 = f1_score(labels.cpu().numpy(), pred_ids.cpu().numpy(), average='weighted', zero_division=0)
+        precision = precision_score(labels.cpu().numpy(), pred_ids.cpu().numpy(), average='weighted', zero_division=0)
+        recall = recall_score(labels.cpu().numpy(), pred_ids.cpu().numpy(), average='weighted', zero_division=0)
+        
         perplexity_results.append(perplexity.item())
         rouge1_results.append(scores.fmeasure)
+        f1_results.append(f1)
+        precision_results.append(precision)
+        recall_results.append(recall)
+        
         if compute_result:
             perplexity_mean = np.mean(perplexity_results)
             rouge1_mean = np.mean(rouge1_results)
+            f1_mean = np.mean(f1_results)
+            precision_mean = np.mean(precision_results)
+            recall_mean = np.mean(recall_results)
             perplexity_results = []
             rouge1_results = []
-            return {"perplexity": perplexity_mean, "rouge1": rouge1_mean}
-        return {"perplexity": perplexity.item(), "rouge1": scores.fmeasure}
+            f1_results = []
+            precision_results = []
+            recall_results = []
+            return {
+                "perplexity": perplexity_mean,
+                "rouge1": rouge1_mean,
+                "f1": f1_mean,
+                "precision": precision_mean,
+                "recall": recall_mean,
+            }
+        return {
+            "perplexity": perplexity.item(),
+            "rouge1": scores.fmeasure,
+            "f1": f1,
+            "precision": precision,
+            "recall": recall,
+        }
     
     return compute_metrics
 class GlobalStepCallback(TrainerCallback):

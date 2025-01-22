@@ -29,6 +29,7 @@ import hydra
 from omegaconf import DictConfig
 import copy
 from torch.optim.lr_scheduler import LambdaLR
+from torch.optim import SGD
 
 
 # Load dataset and tokenize
@@ -57,6 +58,22 @@ def custom_lr_scheduler(optimizer, num_warmup_steps, elapsed_steps, total_steps)
             0.0,
             float(total_steps - global_step)
             / float(max(1, total_steps - num_warmup_steps)),
+        )
+
+    return LambdaLR(optimizer, lr_lambda)
+
+
+def constant_with_cooloff_lr_scheduler(optimizer, num_warmup_steps, elapsed_steps, total_steps, cooloff_steps):
+    def lr_lambda(current_step):
+        global_step = elapsed_steps + current_step
+        if global_step < num_warmup_steps:
+            return float(global_step) / float(max(1, num_warmup_steps))
+        elif global_step < total_steps - cooloff_steps:
+            return 1.0
+        return max(
+            0.0,
+            float(total_steps - global_step)
+            / float(max(1, cooloff_steps)),
         )
 
     return LambdaLR(optimizer, lr_lambda)
@@ -138,6 +155,7 @@ class HuggingFaceClient(NumPyClient):
                 client_id=f"{self.cfg.run_id}-client-{self.client_id}",
             )
             
+            optimizer = SGD(self.model.parameters(), lr=self.cfg.training.learning_rate)
             trainer = SFTTrainer(
                 model=self.model,
                 args=training_args,
@@ -149,15 +167,17 @@ class HuggingFaceClient(NumPyClient):
                 processing_class=self.tokenizer,
                 compute_metrics=gen_compute_metrics(self.tokenizer),
                 callbacks=[global_step_callback],
+                optimizers=(optimizer, None)  # Add optimizer here
             )
 
-            num_warmup_steps = int(self.cfg.training.warmup_ratio * self.total_steps)
-            optimizer = trainer.create_optimizer()
-            lr_scheduler = custom_lr_scheduler(
+            num_warmup_steps = int(self.cfg.simulation.warmup_ratio * self.total_steps)
+            cooloff_steps = int(self.cfg.simulation.cooloff_ratio * self.total_steps)
+            lr_scheduler = constant_with_cooloff_lr_scheduler(
                 optimizer,
                 num_warmup_steps,
                 elapsed_steps,
                 self.total_steps,
+                cooloff_steps,
             )
             trainer.lr_scheduler = lr_scheduler
 

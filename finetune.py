@@ -23,7 +23,7 @@ from peft import LoraConfig, get_peft_model
 from datasets import load_dataset
 
 # Generic imports
-import logging
+from logging import DEBUG
 import torch
 import numpy as np
 import wandb
@@ -37,6 +37,7 @@ from client import HuggingFaceClient
 from data_formatting import get_tokenizer_and_data_collator_and_prompt_formatting
 from client_manager import RandomOrgClientManager
 from evalaute_server import get_evaluate_fn
+from startegy import SaveModelStrategy
 
 
 # Fix random seeds
@@ -46,6 +47,7 @@ def set_seed(seed: int):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+
 
 set_seed(42)
 
@@ -63,22 +65,41 @@ def start_flower_simulation(cfg: DictConfig):
         cfg.model.name, cfg.model.tokenizer, cfg.model.instruction_token
     )
 
-    partitioner = IidPartitioner(num_partitions=cfg.simulation.num_clients)
-    # Let's partition the "train" split of the MNIST dataset
-    # The MNIST dataset will be downloaded if it hasn't been already
-
-    fds = FederatedDataset(
-        dataset="json",
-        partitioners={"train": partitioner},
+    train_set = load_dataset(
+        "json",
         data_files=cfg.train_dataset.files,
+        split=cfg.validation_dataset.split,
     )
+
+    # Split train_data into equal sections
+    num_rounds = cfg.simulation.num_rounds
+    total_steps = len(train_set)
+    num_unique_rounds = int(np.ceil(num_rounds / cfg.simulation.eqivalent_cent_epochs))
+    client_remainder = total_steps % cfg.simulation.num_clients
+    client_data_size = total_steps // cfg.simulation.num_clients
+    # Remove client_remainder elements from train set while keeping the type as a dataset
+    train_set = train_set.select(range(total_steps - client_remainder))
+
+    client_round_data_size = client_data_size // num_unique_rounds
+    cleint_ds_remainder = client_round_data_size % num_unique_rounds
+    total_loss = cleint_ds_remainder * cfg.simulation.num_clients + client_remainder
+    log(DEBUG,
+        "Total centralised equivalnet data size: %s",
+        client_round_data_size * num_rounds * cfg.simulation.num_clients,
+    )
+    log(DEBUG,"Total lossed elements: %s", total_loss)
+    client_round_data_size = int(
+        np.ceil(client_round_data_size / cfg.training.per_device_train_batch_size)
+    )
+    log(DEBUG,"Total expected steps per round: %s", client_round_data_size)
+
     with open_dict(cfg):
         cfg.run_id = wandb.util.generate_id()
         cfg.output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
 
     # Append run_id and output_dir to a table at a predefined path
     table_path = "/nfs-share/pa511/llm_memorisation/new_work/table.csv"
-    with open(table_path, mode='a', newline='') as file:
+    with open(table_path, mode="a", newline="") as file:
         writer = csv.writer(file)
         writer.writerow([cfg.run_id, cfg.output_dir])
 
@@ -100,18 +121,21 @@ def start_flower_simulation(cfg: DictConfig):
 
     # Client app initialisation
     def client_fn(context: Context):
+        nonlocal num_unique_rounds
+        nonlocal train_set
         partition_id = int(context.node_config["partition-id"])
-        print(f"Client {partition_id} started")
-        train_data = fds.load_partition(partition_id, "train")
+        train_data = train_set.shard(
+            num_shards=cfg.simulation.num_clients, index=partition_id
+        )
 
-        # Split train_data into equal sections
-        num_rounds = cfg.simulation.num_rounds
         total_steps = len(train_data)
-        num_unique_rounds = int(np.ceil(
-            num_rounds / cfg.simulation.eqivalent_cent_epochs
-        ))
-        print(f"Total dataset size: {total_steps}, num_unique_rounds: {num_unique_rounds}, eqivalent_cent_epochs: {cfg.simulation.eqivalent_cent_epochs}")
-        train_data_splits = [train_data.shard(num_shards=num_unique_rounds, index=i) for i in range(num_unique_rounds)]
+        remainder = total_steps % num_unique_rounds
+        train_data = train_data.select(range(total_steps - remainder))
+
+        train_data_splits = [
+            train_data.shard(num_shards=num_unique_rounds, index=i)
+            for i in range(num_unique_rounds)
+        ]
         return HuggingFaceClient(
             config=cfg,
             tokenizer=tokenizer,
@@ -127,15 +151,18 @@ def start_flower_simulation(cfg: DictConfig):
     # Server app initialisation
     def server_fn(context: Context):
         server_config = ServerConfig(num_rounds=cfg.simulation.num_rounds)
-        strategy = FedAvg(
+        strategy = SaveModelStrategy(
             min_available_clients=cfg.simulation.num_clients,
             on_fit_config_fn=fit_config_fn,
+            on_evaluate_config_fn=None,
+            score_key = "rouge1",
             evaluate_fn=get_evaluate_fn(
                 cfg=cfg,
                 tokenizer=tokenizer,
                 collator=collator,
                 eval_data=eval_set,
                 lora_config=lora_config,
+                client_steps=client_round_data_size,
             ),
         )
         return ServerAppComponents(

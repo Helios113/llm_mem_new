@@ -1,10 +1,12 @@
 # Huggingface imports
 import csv
 import os
-from transformers import AutoTokenizer, AutoModelForCausalLM, Trainer, TrainingArguments
+from transformers import AutoTokenizer, AutoModelForCausalLM, Trainer, TrainingArguments, get_linear_schedule_with_warmup
 from peft import LoraConfig, get_peft_model
 from datasets import load_dataset
 from trl import SFTConfig, SFTTrainer, DataCollatorForCompletionOnlyLM
+from torch.optim.lr_scheduler import LambdaLR
+from torch.optim import SGD
 
 # Generic imports
 import logging
@@ -28,6 +30,20 @@ def set_seed(seed: int):
         torch.cuda.manual_seed_all(seed)
 
 set_seed(42)
+
+def constant_with_cooloff_lr_scheduler(optimizer, num_warmup_steps, total_steps, cooloff_steps):
+    def lr_lambda(current_step):
+        global_step = current_step
+        if global_step < num_warmup_steps:
+            return float(global_step) / float(max(1, num_warmup_steps))
+        elif global_step < total_steps - cooloff_steps:
+            return 1.0
+        return max(
+            0.0,
+            float(total_steps - global_step) / float(max(1, cooloff_steps)),
+        )
+
+    return LambdaLR(optimizer, lr_lambda)
 
 @hydra.main(version_base=None, config_path="config", config_name="config_cent")
 def start_centralised_training(cfg: DictConfig):
@@ -68,7 +84,9 @@ def start_centralised_training(cfg: DictConfig):
 
     base_model = AutoModelForCausalLM.from_pretrained(cfg.model.name)
     model = get_peft_model(base_model, lora_config)
-
+    total_steps = cfg.training.max_steps
+    num_warmup_steps = int(total_steps * cfg.simulation.warmup_ratio)
+    cooloff_steps = int(total_steps * cfg.simulation.cooloff_ratio)
     with wandb.init(
         project=cfg.wandb.project,
         reinit=True,
@@ -81,22 +99,30 @@ def start_centralised_training(cfg: DictConfig):
         training_args = SFTConfig(
             output_dir=cfg.output_dir,
             run_name=f"{cfg.run_id}-centralised",
-            **OmegaConf.to_object(cfg.training)
+            **OmegaConf.to_object(cfg.training),
         )
         global_step_callback = GlobalStepCallback(
             elapsed_steps=0, client_id=f"{cfg.run_id}-centralised"
         )
 
+        optimizer = SGD(model.parameters(), lr=cfg.training.learning_rate)
+
         trainer = SFTTrainer(
-                model=model,
-                args=training_args,
-                train_dataset=train_dataset,
-                eval_dataset=eval_dataset,
-                data_collator=collator,
-                processing_class=tokenizer,
-                compute_metrics=gen_compute_metrics(tokenizer),
-                callbacks=[global_step_callback],
-            )
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+            data_collator=collator,
+            processing_class=tokenizer,
+            compute_metrics=gen_compute_metrics(tokenizer),
+            callbacks=[global_step_callback],
+            optimizers=(optimizer, constant_with_cooloff_lr_scheduler(
+                optimizer=optimizer,
+                num_warmup_steps=num_warmup_steps,
+                total_steps=total_steps,
+                cooloff_steps=cooloff_steps,
+            )),
+        )
 
         trainer.train()
         global_step_callback.save_logs(cfg.output_dir)
