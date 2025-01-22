@@ -1,3 +1,4 @@
+project: "federated-flwr"
 model:
   name: "EleutherAI/pythia-125m"
   tokenizer: "EleutherAI/pythia-125m"
@@ -44,24 +45,6 @@ training:
 evaluation:
   output_dir: "./results"
   per_device_eval_batch_size: 8
-
-wandb:
-  project: "federated-flwr"
-  wandb_config:
-    model_name: ${model.name}
-    tokenizer: ${model.tokenizer}
-    instruction_token: ${model.instruction_token}
-    lora_r: ${lora.r}
-    lora_alpha: ${lora.alpha}
-    lora_dropout: ${lora.dropout}
-    train_dataset_name: ${train_dataset.name}
-    validation_dataset_name: ${validation_dataset.name}
-    per_device_train_batch_size: ${training.per_device_train_batch_size}
-    max_steps: ${training.max_steps}
-    evaluation_strategy: ${training.evaluation_strategy}
-    eval_steps: ${training.eval_steps}
-    num_clients: ${simulation.num_clients}
-    num_rounds: ${simulation.num_rounds}
 
 simulation:
   num_clients: 4

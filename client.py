@@ -81,15 +81,20 @@ def constant_with_cooloff_lr_scheduler(optimizer, num_warmup_steps, elapsed_step
 
 # Define the Hugging Face model and tokenizer
 class HuggingFaceClient(NumPyClient):
-    def __init__(
-        self, config, train_data, eval_data, tokenizer, collator, lora_config, client_id
-    ):
+    def __init__(self, config, tokenizer, collator, train_data, eval_data, lora_config, client_id):
+        self.config = config
         self.tokenizer = tokenizer
         self.collator = collator
-        self.base_model = AutoModelForCausalLM.from_pretrained(config.model.name)
-        self.model = get_peft_model(self.base_model, lora_config)
-        self.cfg = config
         self.train_data = train_data
+        self.eval_data = eval_data
+        self.lora_config = lora_config
+        self.client_id = client_id
+        self.model = AutoModelForCausalLM.from_pretrained(config.model.name)
+
+        if self.lora_config:
+            self.model = get_peft_model(self.model, self.lora_config)
+
+        self.cfg = config
         self.steps_per_round = len(train_data[0])
         self.bs = config.training.per_device_train_batch_size
         self.total_steps = 0
@@ -97,9 +102,7 @@ class HuggingFaceClient(NumPyClient):
             self.total_steps += len(self.train_data[i])
         self.total_steps =int(np.ceil(self.total_steps* config.simulation.eqivalent_cent_epochs/self.bs))
 
-        self.eval_data = eval_data
         # Initialize Weights & Biases
-        self.client_id = client_id
         self.num_unique_rounds = int(
             np.ceil(
                 config.simulation.num_rounds / config.simulation.eqivalent_cent_epochs
@@ -122,13 +125,13 @@ class HuggingFaceClient(NumPyClient):
     def fit(self, parameters, config):
         log(logging.INFO, "Client {}: Starting training".format(self.client_id))
         with wandb.init(
-            project=self.cfg.wandb.project,
+            project=self.project,
             reinit=True,
             resume="allow",
             group=self.cfg.run_id,
             name=f"{self.cfg.run_id}-client-{self.client_id}",
             id=f"{self.cfg.run_id}-client-{self.client_id}",
-            config=OmegaConf.to_object(self.cfg.wandb),
+            config=OmegaConf.to_object(self.cfg),
         ) as run:
             self.set_parameters(parameters)
 

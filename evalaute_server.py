@@ -42,13 +42,13 @@ def get_evaluate_fn(cfg, tokenizer, collator, eval_data, lora_config, client_ste
     def evaluate(
         server_round: int, parameters: NDArrays, config: Dict[str, Scalar]):
         with wandb.init(
-            project=cfg.wandb.project,
+            project=cfg.project,
             reinit=True,
             resume="allow",
             group=cfg.run_id,
             name=f"{cfg.run_id}-server",
             id=f"{cfg.run_id}-server",
-            config=OmegaConf.to_object(cfg.wandb)
+            config=OmegaConf.to_object(cfg)
         ) as run:
             set_parameters(parameters)
             training_args = SFTConfig(

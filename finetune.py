@@ -57,6 +57,14 @@ def fit_config_fn(server_round: int):
     return fit_config
 
 
+def generate_run_id(cfg: DictConfig):
+    model_name = cfg.model.name.replace("/", "_")
+    dataset_name = cfg.train_dataset.files[0].split("/")[-1].replace(".json", "")
+    lora_status = "lora" if cfg.simulation.use_lora else "no_lora"
+    unique_id = wandb.util.generate_id()
+    return f"{model_name}_{dataset_name}_{lora_status}_{unique_id}"
+
+
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def start_flower_simulation(cfg: DictConfig):
 
@@ -93,8 +101,10 @@ def start_flower_simulation(cfg: DictConfig):
     )
     log(DEBUG,"Total expected steps per round: %s", client_round_data_size)
 
+    if "run_id" not in cfg:
+        with open_dict(cfg):
+            cfg.run_id = generate_run_id(cfg)
     with open_dict(cfg):
-        cfg.run_id = wandb.util.generate_id()
         cfg.output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
 
     # Append run_id and output_dir to a table at a predefined path
@@ -109,15 +119,17 @@ def start_flower_simulation(cfg: DictConfig):
         split=cfg.validation_dataset.split,
     )
 
-    # Create LoraConfig
-    lora_config = LoraConfig(
-        r=cfg.lora.r,
-        lora_alpha=cfg.lora.alpha,
-        lora_dropout=cfg.lora.dropout,
-        target_modules=cfg.lora.target_modules,
-        bias=cfg.lora.bias,
-        task_type="CAUSAL_LM",
-    )
+    # Create LoraConfig if LoRA is enabled
+    lora_config = None
+    if cfg.simulation.use_lora:
+        lora_config = LoraConfig(
+            r=cfg.lora.r,
+            lora_alpha=cfg.lora.alpha,
+            lora_dropout=cfg.lora.dropout,
+            target_modules=cfg.lora.target_modules,
+            bias=cfg.lora.bias,
+            task_type="CAUSAL_LM",
+        )
 
     # Client app initialisation
     def client_fn(context: Context):
@@ -156,6 +168,7 @@ def start_flower_simulation(cfg: DictConfig):
             on_fit_config_fn=fit_config_fn,
             on_evaluate_config_fn=None,
             score_key = "rouge1",
+            cfg = cfg,
             evaluate_fn=get_evaluate_fn(
                 cfg=cfg,
                 tokenizer=tokenizer,

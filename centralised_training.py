@@ -45,6 +45,13 @@ def constant_with_cooloff_lr_scheduler(optimizer, num_warmup_steps, total_steps,
 
     return LambdaLR(optimizer, lr_lambda)
 
+def generate_run_id(cfg: DictConfig):
+    model_name = cfg.model.name.replace("/", "_")
+    dataset_name = cfg.train_dataset.files[0].split("/")[-1].replace(".json", "")
+    lora_status = "lora" if cfg.simulation.use_lora else "no_lora"
+    unique_id = wandb.util.generate_id()
+    return f"{model_name}_{dataset_name}_{lora_status}_{unique_id}"
+
 @hydra.main(version_base=None, config_path="config", config_name="config_cent")
 def start_centralised_training(cfg: DictConfig):
     tokenizer, collator = get_tokenizer_and_data_collator_and_prompt_formatting(
@@ -63,38 +70,47 @@ def start_centralised_training(cfg: DictConfig):
         split=cfg.validation_dataset.split,
     )
 
-    with open_dict(cfg):
-        cfg.output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
-
     # Append run_id and output_dir to a table at a predefined path
     table_path = "/nfs-share/pa511/llm_memorisation/new_work/table.csv"
+    
+    if "run_id" not in cfg:
+        with open_dict(cfg):
+            cfg.run_id = generate_run_id(cfg)
+    with open_dict(cfg):
+        cfg.output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     with open(table_path, mode='a', newline='') as file:
         writer = csv.writer(file)
         writer.writerow([cfg.run_id, cfg.output_dir])
 
-    # Create LoraConfig
-    lora_config = LoraConfig(
-        r=cfg.lora.r,
-        lora_alpha=cfg.lora.alpha,
-        lora_dropout=cfg.lora.dropout,
-        target_modules=cfg.lora.target_modules,
-        bias=cfg.lora.bias,
-        task_type="CAUSAL_LM",
-    )
+    # Create LoraConfig if LoRA is enabled
+    lora_config = None
+    if cfg.simulation.use_lora:
+        lora_config = LoraConfig(
+            r=cfg.lora.r,
+            lora_alpha=cfg.lora.alpha,
+            lora_dropout=cfg.lora.dropout,
+            target_modules=cfg.lora.target_modules,
+            bias=cfg.lora.bias,
+            task_type="CAUSAL_LM",
+        )
 
     base_model = AutoModelForCausalLM.from_pretrained(cfg.model.name)
-    model = get_peft_model(base_model, lora_config)
+    if lora_config:
+        model = get_peft_model(base_model, lora_config)
+    else:
+        model = base_model
+
     total_steps = cfg.training.max_steps
     num_warmup_steps = int(total_steps * cfg.simulation.warmup_ratio)
     cooloff_steps = int(total_steps * cfg.simulation.cooloff_ratio)
     with wandb.init(
-        project=cfg.wandb.project,
+        project=cfg.project,
         reinit=True,
         resume="allow",
         group=cfg.run_id,
         name=f"{cfg.run_id}-centralised",
         id=f"{cfg.run_id}-centralised",
-        config=OmegaConf.to_object(cfg.wandb)
+        config=OmegaConf.to_object(cfg)
     ) as run:
         training_args = SFTConfig(
             output_dir=cfg.output_dir,
