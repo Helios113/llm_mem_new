@@ -16,6 +16,7 @@ import wandb
 import hydra
 from omegaconf import DictConfig, OmegaConf, open_dict
 import random
+import yaml
 
 # Our packages
 from data_formatting import get_tokenizer_and_data_collator_and_prompt_formatting
@@ -46,8 +47,8 @@ def constant_with_cooloff_lr_scheduler(optimizer, num_warmup_steps, total_steps,
     return LambdaLR(optimizer, lr_lambda)
 
 def generate_run_id(cfg: DictConfig):
-    model_name = cfg.model.name.replace("/", "_")
-    dataset_name = cfg.train_dataset.files[0].split("/")[-1].replace(".json", "")
+    model_name = cfg.model.name.split("/")[-1]
+    dataset_name = cfg.dataset.path.split("/")[-1]
     lora_status = "lora" if cfg.simulation.use_lora else "no_lora"
     unique_id = wandb.util.generate_id()
     return f"{model_name}_{dataset_name}_{lora_status}_{unique_id}"
@@ -57,18 +58,29 @@ def start_centralised_training(cfg: DictConfig):
     tokenizer, collator = get_tokenizer_and_data_collator_and_prompt_formatting(
         cfg.model.name, cfg.model.tokenizer, cfg.model.instruction_token
     )
+    
 
-    train_dataset = load_dataset(
+    train_set = load_dataset(
         "json",
-        data_files=cfg.train_dataset.files,
-        split="train",
+        data_files=os.path.join(cfg.dataset.path, "data_train.json"),
+        split="train"
     )
 
-    eval_dataset = load_dataset(
+    # Load the eval dataset
+    eval_set = load_dataset(
         "json",
-        data_files=cfg.validation_dataset.files,
-        split=cfg.validation_dataset.split,
+        data_files=os.path.join(cfg.dataset.path, "data_non_member.json"),
+        split="train"
     )
+    
+    datacard_path = os.path.join(cfg.dataset.path, "datacard.yaml")
+    with open(datacard_path, 'r') as file:
+        datacard = yaml.safe_load(file)
+    centralised_steps = datacard.get("centralised_steps", 0)
+    with open_dict(cfg):
+        cfg.training.max_steps = int(np.ceil(centralised_steps/cfg.training.per_device_train_batch_size))
+        cfg.training.logging_steps = int(cfg.training.max_steps/100)
+        
 
     # Append run_id and output_dir to a table at a predefined path
     table_path = "/nfs-share/pa511/llm_memorisation/new_work/table.csv"
@@ -126,8 +138,8 @@ def start_centralised_training(cfg: DictConfig):
         trainer = SFTTrainer(
             model=model,
             args=training_args,
-            train_dataset=train_dataset,
-            eval_dataset=eval_dataset,
+            train_dataset=train_set,
+            eval_dataset=eval_set,
             data_collator=collator,
             processing_class=tokenizer,
             compute_metrics=gen_compute_metrics(tokenizer),

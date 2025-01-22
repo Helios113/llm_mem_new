@@ -31,6 +31,7 @@ import hydra
 from omegaconf import DictConfig, open_dict
 import csv
 import random
+import os
 
 # Our packages
 from client import HuggingFaceClient
@@ -58,8 +59,8 @@ def fit_config_fn(server_round: int):
 
 
 def generate_run_id(cfg: DictConfig):
-    model_name = cfg.model.name.replace("/", "_")
-    dataset_name = cfg.train_dataset.files[0].split("/")[-1].replace(".json", "")
+    model_name = cfg.model.name.split("/")[-1]
+    dataset_name = cfg.dataset.path.split("/")[-1]
     lora_status = "lora" if cfg.simulation.use_lora else "no_lora"
     unique_id = wandb.util.generate_id()
     return f"{model_name}_{dataset_name}_{lora_status}_{unique_id}"
@@ -73,12 +74,20 @@ def start_flower_simulation(cfg: DictConfig):
         cfg.model.name, cfg.model.tokenizer, cfg.model.instruction_token
     )
 
+    # Load the train dataset
     train_set = load_dataset(
         "json",
-        data_files=cfg.train_dataset.files,
-        split=cfg.validation_dataset.split,
+        data_files=os.path.join(cfg.dataset.path, "data_train.json"),
+        split="train"
     )
 
+    # Load the eval dataset
+    eval_set = load_dataset(
+        "json",
+        data_files=os.path.join(cfg.dataset.path, "data_non_member.json"),
+        split="train"
+    )
+   
     # Split train_data into equal sections
     num_rounds = cfg.simulation.num_rounds
     total_steps = len(train_set)
@@ -112,12 +121,6 @@ def start_flower_simulation(cfg: DictConfig):
     with open(table_path, mode="a", newline="") as file:
         writer = csv.writer(file)
         writer.writerow([cfg.run_id, cfg.output_dir])
-
-    eval_set = load_dataset(
-        "json",
-        data_files=cfg.validation_dataset.files,
-        split=cfg.validation_dataset.split,
-    )
 
     # Create LoraConfig if LoRA is enabled
     lora_config = None
