@@ -6,7 +6,7 @@ model:
 
 lora:
   r: 8
-  alpha: 32
+  alpha: 8
   dropout: 0.1
   target_modules: null
   bias: "none"
@@ -51,6 +51,7 @@ simulation:
   num_rounds: 50
   warmup_ratio: 0.1
   cooloff_ratio: 0.1
+  use_lora: True
   client_resources:
     num_cpus: 8
     num_gpus: 1.0

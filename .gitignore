@@ -4,3 +4,7 @@ slurm_out/*
 slurm-*
 *.pyc
 data/*
+*.pt
+*.json
+*.safetensors
+*.bin
