@@ -1,4 +1,5 @@
 # Flower client imports
+import datetime
 from flwr.client import NumPyClient
 from flwr.client import ClientApp
 
@@ -68,7 +69,7 @@ def generate_run_id(cfg: DictConfig):
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def start_flower_simulation(cfg: DictConfig):
-
+    now = datetime.datetime.now()
     client_manager = RandomOrgClientManager("2e4c64c1-80ab-42b9-8924-9576140f571e")
     tokenizer, collator = get_tokenizer_and_data_collator_and_prompt_formatting(
         cfg.model.name, cfg.model.tokenizer, cfg.model.instruction_token
@@ -87,6 +88,8 @@ def start_flower_simulation(cfg: DictConfig):
         data_files=os.path.join(cfg.dataset.path, "data_non_member.json"),
         split="train"
     )
+    if len(eval_set) >1000:
+        eval_set = eval_set.select(range(1000))
    
     # Split train_data into equal sections
     num_rounds = cfg.simulation.num_rounds
@@ -159,6 +162,7 @@ def start_flower_simulation(cfg: DictConfig):
             eval_data=eval_set,
             lora_config=lora_config,
             client_id=partition_id,
+            now = now
         ).to_client()
 
     client_app = ClientApp(client_fn)

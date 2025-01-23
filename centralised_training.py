@@ -1,5 +1,6 @@
 # Huggingface imports
 import csv
+import datetime
 import os
 from transformers import AutoTokenizer, AutoModelForCausalLM, Trainer, TrainingArguments, get_linear_schedule_with_warmup
 from peft import LoraConfig, get_peft_model
@@ -7,7 +8,6 @@ from datasets import load_dataset
 from trl import SFTConfig, SFTTrainer, DataCollatorForCompletionOnlyLM
 from torch.optim.lr_scheduler import LambdaLR
 from torch.optim import SGD
-
 # Generic imports
 import logging
 import torch
@@ -55,6 +55,7 @@ def generate_run_id(cfg: DictConfig):
 
 @hydra.main(version_base=None, config_path="config", config_name="config_cent")
 def start_centralised_training(cfg: DictConfig):
+    now = datetime.datetime.now()
     tokenizer, collator = get_tokenizer_and_data_collator_and_prompt_formatting(
         cfg.model.name, cfg.model.tokenizer, cfg.model.instruction_token
     )
@@ -72,6 +73,8 @@ def start_centralised_training(cfg: DictConfig):
         data_files=os.path.join(cfg.dataset.path, "data_non_member.json"),
         split="train"
     )
+    if len(eval_set) >1000:
+        eval_set = eval_set.select(range(1000))
     
     datacard_path = os.path.join(cfg.dataset.path, "datacard.yaml")
     with open(datacard_path, 'r') as file:
@@ -130,7 +133,7 @@ def start_centralised_training(cfg: DictConfig):
             **OmegaConf.to_object(cfg.training),
         )
         global_step_callback = GlobalStepCallback(
-            elapsed_steps=0, client_id=f"{cfg.run_id}-centralised"
+            elapsed_steps=0, client_id=f"{cfg.run_id}-centralised", start_time=now
         )
 
         optimizer = SGD(model.parameters(), lr=cfg.training.learning_rate)

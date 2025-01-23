@@ -9,6 +9,22 @@ import hydra
 from omegaconf import DictConfig, open_dict
 from data_formatting import get_tokenizer_and_data_collator_and_prompt_formatting
 from trl import SFTConfig, SFTTrainer, DataCollatorForCompletionOnlyLM
+from torch.utils.data import Dataset
+
+class ArtificialDataset(Dataset):
+    def __init__(self, tokenizer, max_seq_length, num_samples=1000):
+        self.tokenizer = tokenizer
+        self.max_seq_length = max_seq_length
+        self.num_samples = num_samples
+
+    def __len__(self):
+        return self.num_samples
+    
+    def __getitem__(self, idx):
+        strn = "###Responce:"
+        strn += "ONETOKEN" * self.max_seq_length
+        tokens = self.tokenizer(strn, return_tensors="pt", padding="max_length", truncation=True)
+        return {key: val.squeeze(0) for key, val in tokens.items()}
 
 def sanitize_filename(name: str) -> str:
     return name.replace("/", "_")
@@ -18,11 +34,7 @@ def find_largest_batchsize_for_model(cfg: DictConfig, use_lora: bool, results: l
         cfg.model.name, cfg.model.tokenizer, cfg.model.instruction_token
     )
 
-    train_dataset = load_dataset(
-        "json",
-        data_files=cfg.train_dataset.files,
-        split="train",
-    )
+    train_dataset = ArtificialDataset(tokenizer, max_seq_length=512)
 
     # Create LoraConfig if LoRA is enabled
     lora_config = None
@@ -46,13 +58,13 @@ def find_largest_batchsize_for_model(cfg: DictConfig, use_lora: bool, results: l
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     device_name = sanitize_filename(torch.cuda.get_device_name(device) if torch.cuda.is_available() else "cpu")
-    param_size = sum(p.numel() for p in model.parameters()) * 4 / (1024 ** 3)  # Convert to GB (assuming float32)
-    total_vram = torch.cuda.get_device_properties(device).total_memory / (1024 ** 3) if torch.cuda.is_available() else "N/A"
+    param_size = sum(p.numel() for p in model.parameters()) * 4 / (512 ** 3)  # Convert to GB (assuming float32)
+    total_vram = torch.cuda.get_device_properties(device).total_memory / (512 ** 3) if torch.cuda.is_available() else "N/A"
     floating_point_accuracy = next(model.parameters()).dtype
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad) * 4 / (1024 ** 3)
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad) * 4 / (512 ** 3)
 
     # Perform binary search to find the largest batch size that fits in memory
-    low, high = 1, 1024
+    low, high = 1, 512
     while low <= high:
         batch_size = (low + high) // 2
         try:
@@ -60,6 +72,7 @@ def find_largest_batchsize_for_model(cfg: DictConfig, use_lora: bool, results: l
                 output_dir="./tmp",
                 per_device_train_batch_size=batch_size,
                 num_train_epochs=1,
+                max_seq_length=512,
                 max_steps=1,
                 report_to="none"            
             )

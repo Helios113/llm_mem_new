@@ -2,6 +2,7 @@ import json
 import random
 import os
 from typing import List, Tuple
+from datasets import load_dataset
 
 def formatting_prompts_func(example, key1, key2):
         output_texts = []
@@ -25,8 +26,9 @@ def generate_datasets_with_merge(
 
     target_name = "data"
     # Load the dataset
-    with open(dataset_path, 'r') as file:
-        dataset = json.load(file)
+    # with open(dataset_path, 'r') as file:
+    #     dataset = json.load(file)
+    dataset = load_dataset("json", data_files=dataset_path, split="train").to_list()
     
     # Shuffle the dataset to ensure randomness
     random.shuffle(dataset)
@@ -35,7 +37,8 @@ def generate_datasets_with_merge(
     sample_size = int(x * len(dataset))
     
     # Split into non-member set and rest of the dataset (train candidate set)
-    format_dataset = formatting_prompts_func(dataset, col1, col2)
+    # format_dataset = formatting_prompts_func(dataset, col1, col2)
+    format_dataset = dataset
     non_member_set = format_dataset[:sample_size]
     train_candidate_set = format_dataset[sample_size:]
     
@@ -76,8 +79,8 @@ def generate_datasets_with_merge(
     return non_member_set, train_set, member_set
 
 # Usage example:
-target_name = "/nfs-share/pa511/new_work/data/amazonqa/raw/merge2_de.json"
-save_dir = "/nfs-share/pa511/new_work/data/amazonqa/"
+target_name = "/nfs-share/pa511/new_work/data/amazonqa/raw/data_train_filtered.json"
+save_dir = "data/amazonqa"
 col1 = "question"
 col2 = "answer"
 

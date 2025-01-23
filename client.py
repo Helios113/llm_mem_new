@@ -81,7 +81,7 @@ def constant_with_cooloff_lr_scheduler(optimizer, num_warmup_steps, elapsed_step
 
 # Define the Hugging Face model and tokenizer
 class HuggingFaceClient(NumPyClient):
-    def __init__(self, config, tokenizer, collator, train_data, eval_data, lora_config, client_id):
+    def __init__(self, config, tokenizer, collator, train_data, eval_data, lora_config, client_id, now):
         self.config = config
         self.tokenizer = tokenizer
         self.collator = collator
@@ -89,6 +89,7 @@ class HuggingFaceClient(NumPyClient):
         self.eval_data = eval_data
         self.lora_config = lora_config
         self.client_id = client_id
+        self.now = now
         self.model = AutoModelForCausalLM.from_pretrained(config.model.name)
 
         if self.lora_config:
@@ -156,6 +157,7 @@ class HuggingFaceClient(NumPyClient):
             global_step_callback = GlobalStepCallback(
                 elapsed_steps=elapsed_steps,
                 client_id=f"{self.cfg.run_id}-client-{self.client_id}",
+                start_time=self.now,
             )
             
             optimizer = SGD(self.model.parameters(), lr=self.cfg.training.learning_rate)

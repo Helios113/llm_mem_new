@@ -11,6 +11,6 @@
 
 
 #WANDB_MODE=disabled 
-HYDRA_FULL_ERROR=1 poetry run python centralised_training.py training.per_device_train_batch_size=256
+HYDRA_FULL_ERROR=1 poetry run python centralised_training.py training.per_device_train_batch_size=128 simulation.use_lora=False
 # HYDRA_FULL_ERROR=1 poetry run python centralised_training.py
 

@@ -15,7 +15,7 @@ def set_seed(seed: int):
 set_seed(42)
 
 def get_tokenizer_and_data_collator_and_prompt_formatting(model_name: str, tokenizer_name: str, instruction_token = False):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast=True, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast=True, trust_remote_code=True, model_max_length=512)
     tokenizer.add_special_tokens({'pad_token': '<|padding|>'})
     response_template_with_context = '###Responce:'
     if instruction_token:

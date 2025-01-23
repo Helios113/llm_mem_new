@@ -24,6 +24,7 @@ def set_seed(seed: int):
         torch.cuda.manual_seed_all(seed)
 
 set_seed(42)
+import datetime
 
 def gen_compute_metrics(tokenizer):
     perplexity_results = []
@@ -108,10 +109,11 @@ def gen_compute_metrics(tokenizer):
     
     return compute_metrics
 class GlobalStepCallback(TrainerCallback):
-    def __init__(self, elapsed_steps, client_id, is_training=True):
+    def __init__(self, elapsed_steps, client_id, is_training=True, start_time=None):
         self.elapsed_steps = elapsed_steps
         self.client_id = client_id
         self.is_training = is_training
+        self.start_time = start_time
         self.log_data = {"train": [], "eval": []}
 
     def on_log(self, args, state, control, logs=None, **kwargs):
@@ -127,8 +129,9 @@ class GlobalStepCallback(TrainerCallback):
             elif not i.startswith("eval_"):
                 key = "train/" + i
                 commit_dict[key] = state.log_history[-1][i]
+        commit_dict["elapsed_time"] = (datetime.datetime.now() - self.start_time).total_seconds() / 60.0
         wandb.log(data=commit_dict, step=cur_step)
-        self.log_data["train"].append({"cur_step": self.elapsed_steps + state.log_history[-1]["step"], **commit_dict})
+        self.log_data["train"].append({"cur_step": self.elapsed_steps + state.log_history[-1]["step"] ,**commit_dict})
 
     def on_evaluate(self, args, state, control, logs=None, **kwargs):
         # Accumulate logs in JSON structure
@@ -143,6 +146,7 @@ class GlobalStepCallback(TrainerCallback):
             else:
                 key = "eval/" + i
                 commit_dict[key] = state.log_history[-1][i]
+        commit_dict["elapsed_time"] = (datetime.datetime.now() - self.start_time).total_seconds() / 60.0
         wandb.log(data=commit_dict, step=cur_step)
         self.log_data["eval"].append({"cur_step": self.elapsed_steps + state.log_history[-1]["step"], **commit_dict})
 
