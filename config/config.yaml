@@ -1,4 +1,8 @@
 project: "federated-flwr"
+# run_id: "b0jg9cbd3"
+checkpoint_path: ""
+resume: False
+start_round: 0
 model:
   name: "EleutherAI/pythia-125m"
   tokenizer: "EleutherAI/pythia-125m"
@@ -38,7 +42,8 @@ simulation:
   num_rounds: 60 # allways multiple of eqivalent_cent_epochs
   warmup_ratio: 0.1
   cooloff_ratio: 0.1
-  eqivalent_cent_epochs: 20
+  eqivalent_cent_epochs: 4
+  use_lora: True
   client_resources:
     num_cpus: 8
     num_gpus: 1.0

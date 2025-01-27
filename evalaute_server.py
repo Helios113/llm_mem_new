@@ -30,10 +30,12 @@ def set_seed(seed: int):
 
 set_seed(42)
 
-def get_evaluate_fn(cfg, tokenizer, collator, eval_data, lora_config, client_steps):
+def get_evaluate_fn(cfg, tokenizer, collator, eval_data, lora_config, client_steps, start_time, start_round):
     """Return an evaluation function for saving global model."""
-    base_model = AutoModelForCausalLM.from_pretrained(cfg.model.name)
-    model = get_peft_model(base_model, lora_config)
+    model = AutoModelForCausalLM.from_pretrained(cfg.model.name)
+    if cfg.simulation.use_lora:
+        model = get_peft_model(model, lora_config)
+        
     def set_parameters(parameters):
         state_dict = model.state_dict()
         for key, val in zip(state_dict.keys(), parameters):
@@ -50,6 +52,7 @@ def get_evaluate_fn(cfg, tokenizer, collator, eval_data, lora_config, client_ste
             id=f"{cfg.run_id}-server",
             config=OmegaConf.to_object(cfg)
         ) as run:
+            server_round+=start_round
             set_parameters(parameters)
             training_args = SFTConfig(
                 output_dir=cfg.output_dir,
@@ -57,7 +60,7 @@ def get_evaluate_fn(cfg, tokenizer, collator, eval_data, lora_config, client_ste
                 **OmegaConf.to_object(cfg.training)
             )
             global_step_callback = GlobalStepCallback(
-                elapsed_steps=server_round*client_steps, client_id=f"{cfg.run_id}-server", is_training=False
+                elapsed_steps=server_round*client_steps, client_id=f"{cfg.run_id}-server", is_training=False, start_time=start_time
             )
 
             trainer = SFTTrainer(

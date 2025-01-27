@@ -129,7 +129,7 @@ class GlobalStepCallback(TrainerCallback):
             elif not i.startswith("eval_"):
                 key = "train/" + i
                 commit_dict[key] = state.log_history[-1][i]
-        commit_dict["elapsed_time"] = (datetime.datetime.now() - self.start_time).total_seconds() / 60.0
+        commit_dict["train/elapsed_time"] = (datetime.datetime.now() - self.start_time).total_seconds() / 60.0
         wandb.log(data=commit_dict, step=cur_step)
         self.log_data["train"].append({"cur_step": self.elapsed_steps + state.log_history[-1]["step"] ,**commit_dict})
 
@@ -146,7 +146,7 @@ class GlobalStepCallback(TrainerCallback):
             else:
                 key = "eval/" + i
                 commit_dict[key] = state.log_history[-1][i]
-        commit_dict["elapsed_time"] = (datetime.datetime.now() - self.start_time).total_seconds() / 60.0
+        commit_dict["train/elapsed_time"] = (datetime.datetime.now() - self.start_time).total_seconds() / 60.0
         wandb.log(data=commit_dict, step=cur_step)
         self.log_data["eval"].append({"cur_step": self.elapsed_steps + state.log_history[-1]["step"], **commit_dict})
 

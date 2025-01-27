@@ -79,18 +79,18 @@ def start_flower_simulation(cfg: DictConfig):
     train_set = load_dataset(
         "json",
         data_files=os.path.join(cfg.dataset.path, "data_train.json"),
-        split="train"
+        split="train",
     )
 
     # Load the eval dataset
     eval_set = load_dataset(
         "json",
         data_files=os.path.join(cfg.dataset.path, "data_non_member.json"),
-        split="train"
+        split="train",
     )
-    if len(eval_set) >1000:
+    if len(eval_set) > 1000:
         eval_set = eval_set.select(range(1000))
-   
+
     # Split train_data into equal sections
     num_rounds = cfg.simulation.num_rounds
     total_steps = len(train_set)
@@ -103,22 +103,30 @@ def start_flower_simulation(cfg: DictConfig):
     client_round_data_size = client_data_size // num_unique_rounds
     cleint_ds_remainder = client_round_data_size % num_unique_rounds
     total_loss = cleint_ds_remainder * cfg.simulation.num_clients + client_remainder
-    log(DEBUG,
+    log(
+        DEBUG,
         "Total centralised equivalnet data size: %s",
         client_round_data_size * num_rounds * cfg.simulation.num_clients,
     )
-    log(DEBUG,"Total lossed elements: %s", total_loss)
+    log(DEBUG, "Total lossed elements: %s", total_loss)
     client_round_data_size = int(
         np.ceil(client_round_data_size / cfg.training.per_device_train_batch_size)
     )
-    log(DEBUG,"Total expected steps per round: %s", client_round_data_size)
+    log(DEBUG, "Total expected steps per round: %s", client_round_data_size)
 
     if "run_id" not in cfg:
+        if cfg.resume:
+            raise ValueError("Run ID must be provided when resuming training")
         with open_dict(cfg):
             cfg.run_id = generate_run_id(cfg)
     with open_dict(cfg):
         cfg.output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
 
+
+    start_round = 0
+    if cfg.resume:
+        start_round = cfg.start_round
+    
     # Append run_id and output_dir to a table at a predefined path
     table_path = "/nfs-share/pa511/llm_memorisation/new_work/table.csv"
     with open(table_path, mode="a", newline="") as file:
@@ -162,10 +170,18 @@ def start_flower_simulation(cfg: DictConfig):
             eval_data=eval_set,
             lora_config=lora_config,
             client_id=partition_id,
-            now = now
+            now=now,
+            start_round=start_round,
         ).to_client()
 
     client_app = ClientApp(client_fn)
+
+    checkpoint = None
+    if cfg.resume:
+        if cfg.checkpoint_path == "":
+            raise ValueError("Checkpoint path must be provided when resuming training")
+        checkpoint = AutoModelForCausalLM.from_pretrained(cfg.checkpoint_path)
+        checkpoint = [val.cpu().numpy() for val in checkpoint.state_dict().values()]
 
     # Server app initialisation
     def server_fn(context: Context):
@@ -174,8 +190,9 @@ def start_flower_simulation(cfg: DictConfig):
             min_available_clients=cfg.simulation.num_clients,
             on_fit_config_fn=fit_config_fn,
             on_evaluate_config_fn=None,
-            score_key = "rouge1",
-            cfg = cfg,
+            score_key="rouge1",
+            cfg=cfg,
+            initial_parameters=checkpoint,
             evaluate_fn=get_evaluate_fn(
                 cfg=cfg,
                 tokenizer=tokenizer,
@@ -183,6 +200,8 @@ def start_flower_simulation(cfg: DictConfig):
                 eval_data=eval_set,
                 lora_config=lora_config,
                 client_steps=client_round_data_size,
+                start_time=now,
+                start_round=start_round,
             ),
         )
         return ServerAppComponents(

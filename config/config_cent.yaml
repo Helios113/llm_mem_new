@@ -1,4 +1,8 @@
 project: "federated-flwr"
+# run_id: "b0jg9cbd3"
+checkpoint_path: ""
+resume: False
+
 model:
   name: "EleutherAI/pythia-125m"
   tokenizer: "EleutherAI/pythia-125m"
@@ -46,5 +50,3 @@ simulation:
   client_resources:
     num_cpus: 8
     num_gpus: 1.0
-
-# run_id: "b0jg9cbd3"

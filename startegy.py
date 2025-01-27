@@ -12,9 +12,17 @@ class SaveModelStrategy(FedAvg):
         self.previous_best_score = 0
         self.best_parameters = None
         self.best_metrics = None
+        self.best_index = 0
+        self.checkpoint_paths = []
         
+    def delete_all_last_checkpoints(self):
+        for checkpoint in self.checkpoint_paths[:-1]:
+            shutil.rmtree(checkpoint)
+        self.checkpoint_paths = [self.checkpoint_paths[-1]]
     def evaluate(self, server_round, parameters):
         """Evaluate model parameters using an evaluation function."""
+        checkpoint_dir = os.path.join(self.cfg.output_dir, f"checkpoint-{server_round}")
+        self.checkpoint_paths.append(checkpoint_dir)
         if self.evaluate_fn is None:
             # No evaluation function provided
             return None
@@ -24,10 +32,10 @@ class SaveModelStrategy(FedAvg):
             return None
         loss, metrics = eval_res
         curr_score = metrics[self.score_key]
-        checkpoint_dir = os.path.join(self.cfg.output_dir, f"checkpoint-{server_round}")
         if curr_score > self.previous_best_score:
             self.previous_best_score = curr_score
             self.best_metrics = metrics
-        else:
-            shutil.rmtree(checkpoint_dir)   
+            self.delete_all_last_checkpoints()
+        elif len(self.checkpoint_paths) > 2:
+                shutil.rmtree(self.checkpoint_paths.pop(-2))
         return loss, metrics

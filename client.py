@@ -81,7 +81,7 @@ def constant_with_cooloff_lr_scheduler(optimizer, num_warmup_steps, elapsed_step
 
 # Define the Hugging Face model and tokenizer
 class HuggingFaceClient(NumPyClient):
-    def __init__(self, config, tokenizer, collator, train_data, eval_data, lora_config, client_id, now):
+    def __init__(self, config, tokenizer, collator, train_data, eval_data, lora_config, client_id, now, start_round):
         self.config = config
         self.tokenizer = tokenizer
         self.collator = collator
@@ -109,10 +109,7 @@ class HuggingFaceClient(NumPyClient):
                 config.simulation.num_rounds / config.simulation.eqivalent_cent_epochs
             )
         )
-        print(f"Client {client_id} initialized")
-        print(
-            f"Total client steps (ds size * epochs): {self.total_steps}, num_unique_rounds: {self.num_unique_rounds}, eqivalent_cent_epochs: {config.simulation.eqivalent_cent_epochs}"
-        )
+        self.start_round = start_round
 
     def get_parameters(self, config):
         return [val.cpu().numpy() for val in self.model.state_dict().values()]
@@ -126,7 +123,7 @@ class HuggingFaceClient(NumPyClient):
     def fit(self, parameters, config):
         log(logging.INFO, "Client {}: Starting training".format(self.client_id))
         with wandb.init(
-            project=self.project,
+            project=self.cfg.project,
             reinit=True,
             resume="allow",
             group=self.cfg.run_id,
@@ -136,7 +133,7 @@ class HuggingFaceClient(NumPyClient):
         ) as run:
             self.set_parameters(parameters)
 
-            current_round = int(config["current_round"])
+            current_round = int(config["current_round"])+self.start_round
             training_args = SFTConfig(
                 output_dir=self.cfg.output_dir,
                 run_name=f"{self.cfg.run_id}-client-{self.client_id}",

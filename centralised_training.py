@@ -89,6 +89,8 @@ def start_centralised_training(cfg: DictConfig):
     table_path = "/nfs-share/pa511/llm_memorisation/new_work/table.csv"
     
     if "run_id" not in cfg:
+        if cfg.resume:
+            raise ValueError("Run ID must be provided when resuming training")
         with open_dict(cfg):
             cfg.run_id = generate_run_id(cfg)
     with open_dict(cfg):
@@ -154,12 +156,13 @@ def start_centralised_training(cfg: DictConfig):
                 cooloff_steps=cooloff_steps,
             )),
         )
-
-        trainer.train()
+        if cfg.resume:
+            if cfg.checkpoint_path == "":
+                raise ValueError("Checkpoint path must be provided when resuming training")
+            trainer.train(resume_from_checkpoint=cfg.checkpoint_path)
+        else:
+            trainer.train()
         global_step_callback.save_logs(cfg.output_dir)
-        # Save checkpoint
-        checkpoint_dir = os.path.join(cfg.output_dir, f"checkpoint-fin")
-        trainer.save_model(checkpoint_dir)
 
 if __name__ == "__main__":
     start_centralised_training()

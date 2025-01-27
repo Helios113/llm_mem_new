@@ -96,12 +96,12 @@ partitioner = IidPartitioner(num_partitions=8)
 fds = FederatedDataset(
     dataset="json",
     partitioners={"train": partitioner},
-    data_files="/nfs-share/pa511/llm_memorisation/datasets_our/medical_dataset/deduplicated_medical_meadow_flashcards_train.json",
+    data_files="/nfs-share/pa511/new_work/data/medalpaca/data_train.json",
 )
 train_data = fds.load_partition(0, "train")
 val_set = load_dataset(
         "json",
-        data_files="/nfs-share/pa511/llm_memorisation/datasets_our/medical_dataset/deduplicated_medical_meadow_flashcards_non_member.json",
+        data_files="data/medalpaca/data_non_member.json",
         split="train",
     )
 class GlobalStepCallback(TrainerCallback):
@@ -111,7 +111,8 @@ class GlobalStepCallback(TrainerCallback):
         self.is_training = is_training
 
     def on_log(self, args, state, control, logs=None, **kwargs):
-        # print(state.log_history)
+        print("log_hist:", state.log_history)
+        
         cur_step = (self.current_round - 1) * self.steps_per_round + state.log_history[
             -1
         ]["step"]
@@ -127,7 +128,7 @@ class GlobalStepCallback(TrainerCallback):
             elif not i.startswith("eval_"):
                 key = "train/" + i
                 commit_dict[key] = state.log_history[-1][i]
-            print(commit_dict)
+        print("commit dict:", commit_dict)
         # wandb.log(data=commit_dict, step=cur_step)
 
     def on_evaluate(self, args, state, control, logs=None, **kwargs):
@@ -144,7 +145,7 @@ class GlobalStepCallback(TrainerCallback):
                 commit_dict[key] = state.log_history[-1][i]
             print(commit_dict)
         # wandb.log(data=commit_dict, step=cur_step)
-for i in range(1,4):
+for i in range(1):
     print(i)
     global_step_callback = GlobalStepCallback(
             current_round=i, steps_per_round=4
@@ -158,7 +159,7 @@ for i in range(1,4):
         data_collator=collator,
         processing_class = tokenizer,
         compute_metrics=gen_compute_metrics(tokenizer),
-        # callbacks=[global_step_callback],
+        callbacks=[global_step_callback],
     )   
             
     # print(torch.cuda.memory_summary(device=None, abbreviated=False))
