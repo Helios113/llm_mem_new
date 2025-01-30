@@ -11,7 +11,7 @@ from flwr.server.strategy import FedAvg
 
 # Flower other imports
 from flwr.simulation import run_simulation
-from flwr.common import Context
+from flwr.common import Context, ndarrays_to_parameters
 from flwr.common.logger import log
 
 # Flower datasets
@@ -29,7 +29,7 @@ import torch
 import numpy as np
 import wandb
 import hydra
-from omegaconf import DictConfig, open_dict
+from omegaconf import DictConfig, open_dict, OmegaConf
 import csv
 import random
 import os
@@ -38,7 +38,7 @@ import os
 from client import HuggingFaceClient
 from data_formatting import get_tokenizer_and_data_collator_and_prompt_formatting
 from client_manager import RandomOrgClientManager
-from evalaute_server import get_evaluate_fn
+from evaluate_server import get_evaluate_fn
 from startegy import SaveModelStrategy
 
 
@@ -59,17 +59,19 @@ def fit_config_fn(server_round: int):
     return fit_config
 
 
-def generate_run_id(cfg: DictConfig):
+
+def generate_run_id(cfg: DictConfig, unique_id=None):
     model_name = cfg.model.name.split("/")[-1]
     dataset_name = cfg.dataset.path.split("/")[-1]
     lora_status = "lora" if cfg.simulation.use_lora else "no_lora"
-    unique_id = wandb.util.generate_id()
-    return f"{model_name}_{dataset_name}_{lora_status}_{unique_id}"
-
+    if unique_id is None:
+        unique_id = wandb.util.generate_id()
+    return f"{model_name}_{dataset_name}_{lora_status}_{unique_id}_fl"
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def start_flower_simulation(cfg: DictConfig):
     now = datetime.datetime.now()
+    
     client_manager = RandomOrgClientManager("2e4c64c1-80ab-42b9-8924-9576140f571e")
     tokenizer, collator = get_tokenizer_and_data_collator_and_prompt_formatting(
         cfg.model.name, cfg.model.tokenizer, cfg.model.instruction_token
@@ -118,9 +120,25 @@ def start_flower_simulation(cfg: DictConfig):
         if cfg.resume:
             raise ValueError("Run ID must be provided when resuming training")
         with open_dict(cfg):
-            cfg.run_id = generate_run_id(cfg)
+            cfg.run_id = generate_run_id(cfg, None)
+    else:
+        with open_dict(cfg):
+            if cfg.run_id == "":
+                cfg.run_id = generate_run_id(cfg, None)
+            else:
+                cfg.run_id = generate_run_id(cfg, cfg.run_id)
+            
+            
+    # Logging calcs
+    evals_per_round = int(cfg.num_loggings/num_rounds)-1
+    evals_per_round = 1 if evals_per_round < 1 else evals_per_round
+    logging_steps = int(client_round_data_size / evals_per_round)
+    
     with open_dict(cfg):
         cfg.output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
+        cfg.evaluation.per_device_eval_batch_size = cfg.training.per_device_train_batch_size
+        cfg.training.logging_steps = logging_steps
+        cfg.training.eval_steps = cfg.training.logging_steps
 
 
     start_round = 0
@@ -128,10 +146,10 @@ def start_flower_simulation(cfg: DictConfig):
         start_round = cfg.start_round
     
     # Append run_id and output_dir to a table at a predefined path
-    table_path = "/nfs-share/pa511/llm_memorisation/new_work/table.csv"
+    table_path = "/nfs-share/pa511/new_work/table.csv"
     with open(table_path, mode="a", newline="") as file:
         writer = csv.writer(file)
-        writer.writerow([cfg.run_id, cfg.output_dir])
+        writer.writerow([cfg.run_id+"_fl", cfg.output_dir])
 
     # Create LoraConfig if LoRA is enabled
     lora_config = None
@@ -180,8 +198,10 @@ def start_flower_simulation(cfg: DictConfig):
     if cfg.resume:
         if cfg.checkpoint_path == "":
             raise ValueError("Checkpoint path must be provided when resuming training")
-        checkpoint = AutoModelForCausalLM.from_pretrained(cfg.checkpoint_path)
-        checkpoint = [val.cpu().numpy() for val in checkpoint.state_dict().values()]
+        state_dict = AutoModelForCausalLM.from_pretrained(cfg.checkpoint_path).state_dict()
+        parameters = [param.cpu().numpy() for param in state_dict.values()]
+        checkpoint =  ndarrays_to_parameters(parameters)
+
 
     # Server app initialisation
     def server_fn(context: Context):

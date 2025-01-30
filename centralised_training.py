@@ -32,6 +32,7 @@ def set_seed(seed: int):
 
 set_seed(42)
 
+
 def constant_with_cooloff_lr_scheduler(optimizer, num_warmup_steps, total_steps, cooloff_steps):
     def lr_lambda(current_step):
         global_step = current_step
@@ -46,16 +47,19 @@ def constant_with_cooloff_lr_scheduler(optimizer, num_warmup_steps, total_steps,
 
     return LambdaLR(optimizer, lr_lambda)
 
-def generate_run_id(cfg: DictConfig):
+def generate_run_id(cfg: DictConfig, unique_id=None):
     model_name = cfg.model.name.split("/")[-1]
     dataset_name = cfg.dataset.path.split("/")[-1]
     lora_status = "lora" if cfg.simulation.use_lora else "no_lora"
-    unique_id = wandb.util.generate_id()
-    return f"{model_name}_{dataset_name}_{lora_status}_{unique_id}"
+    if unique_id is None:
+        unique_id = wandb.util.generate_id()
+    return f"{model_name}_{dataset_name}_{lora_status}_{unique_id}_cent"
 
 @hydra.main(version_base=None, config_path="config", config_name="config_cent")
 def start_centralised_training(cfg: DictConfig):
     now = datetime.datetime.now()
+
+    
     tokenizer, collator = get_tokenizer_and_data_collator_and_prompt_formatting(
         cfg.model.name, cfg.model.tokenizer, cfg.model.instruction_token
     )
@@ -79,25 +83,34 @@ def start_centralised_training(cfg: DictConfig):
     datacard_path = os.path.join(cfg.dataset.path, "datacard.yaml")
     with open(datacard_path, 'r') as file:
         datacard = yaml.safe_load(file)
-    centralised_steps = datacard.get("centralised_steps", 0)
+    steps_per_epoch = datacard.get("steps_per_epoch", 0)
     with open_dict(cfg):
-        cfg.training.max_steps = int(np.ceil(centralised_steps/cfg.training.per_device_train_batch_size))
-        cfg.training.logging_steps = int(cfg.training.max_steps/100)
+        cfg.training.max_steps = int(np.ceil(cfg.training.pop("num_train_epochs")*steps_per_epoch/cfg.training.per_device_train_batch_size))
+        cfg.training.logging_steps = int(cfg.training.max_steps/cfg.num_loggings)
+        cfg.training.eval_steps = cfg.training.logging_steps
+        
+        cfg.evaluation.per_device_eval_batch_size = cfg.training.per_device_train_batch_size
         
 
     # Append run_id and output_dir to a table at a predefined path
-    table_path = "/nfs-share/pa511/llm_memorisation/new_work/table.csv"
+    table_path = "/nfs-share/pa511/new_work/table.csv"
     
     if "run_id" not in cfg:
         if cfg.resume:
             raise ValueError("Run ID must be provided when resuming training")
         with open_dict(cfg):
-            cfg.run_id = generate_run_id(cfg)
+            cfg.run_id = generate_run_id(cfg, None)
+    else:
+        with open_dict(cfg):
+            if cfg.run_id == "":
+                cfg.run_id = generate_run_id(cfg, None)
+            else:
+                cfg.run_id = generate_run_id(cfg, cfg.run_id)
     with open_dict(cfg):
         cfg.output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     with open(table_path, mode='a', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow([cfg.run_id, cfg.output_dir])
+        writer.writerow([cfg.run_id+"_cent", cfg.output_dir])
 
     # Create LoraConfig if LoRA is enabled
     lora_config = None
@@ -125,17 +138,17 @@ def start_centralised_training(cfg: DictConfig):
         reinit=True,
         resume="allow",
         group=cfg.run_id,
-        name=f"{cfg.run_id}-centralised",
-        id=f"{cfg.run_id}-centralised",
+        name=f"{cfg.run_id}",
+        id=f"{cfg.run_id}",
         config=OmegaConf.to_object(cfg)
     ) as run:
         training_args = SFTConfig(
             output_dir=cfg.output_dir,
-            run_name=f"{cfg.run_id}-centralised",
+            run_name=f"{cfg.run_id}",
             **OmegaConf.to_object(cfg.training),
         )
         global_step_callback = GlobalStepCallback(
-            elapsed_steps=0, client_id=f"{cfg.run_id}-centralised", start_time=now
+            elapsed_steps=0, client_id=f"{cfg.run_id}", start_time=now
         )
 
         optimizer = SGD(model.parameters(), lr=cfg.training.learning_rate)

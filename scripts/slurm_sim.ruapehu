@@ -1,0 +1,20 @@
+#!/bin/bash
+#SBATCH -J LLM_finetune 
+#SBATCH --cpus-per-task=8
+#SBATCH --gres=gpu:1
+
+#! specify node
+#SBATCH -w mauao
+#SBATCH --output=slurm_out/%x.%j.ans
+#SBATCH --error=slurm_out/err_%x.%j.ans
+
+
+#WANDB_MODE=disabled 
+PARAMS="training.per_device_train_batch_size=32 simulation.use_lora=True"
+# PARAMS="$PARAMS run_id=ph9nzwa81"
+
+# PARAMS="$PARAMS simulation.warmup_ratio=0.05 simulation.cooloff_ratio=0.1"
+# PARAMS="$PARAMS checkpoint_path=checkpoints/llm_finetune"
+PARAMS="$PARAMS dataset.path=/nfs-share/pa511/new_work/data/pubmedqa"
+
+HYDRA_FULL_ERROR=1 poetry run python simulate_federated_learning.py $PARAMS

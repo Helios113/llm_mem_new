@@ -48,19 +48,19 @@ def get_evaluate_fn(cfg, tokenizer, collator, eval_data, lora_config, client_ste
             reinit=True,
             resume="allow",
             group=cfg.run_id,
-            name=f"{cfg.run_id}-server",
-            id=f"{cfg.run_id}-server",
+            name=f"{cfg.run_id}_server",
+            id=f"{cfg.run_id}_server",
             config=OmegaConf.to_object(cfg)
         ) as run:
             server_round+=start_round
             set_parameters(parameters)
             training_args = SFTConfig(
                 output_dir=cfg.output_dir,
-                run_name=f"{cfg.run_id}-server",
+                run_name=f"{cfg.run_id}_server",
                 **OmegaConf.to_object(cfg.training)
             )
             global_step_callback = GlobalStepCallback(
-                elapsed_steps=server_round*client_steps, client_id=f"{cfg.run_id}-server", is_training=False, start_time=start_time
+                elapsed_steps=server_round*client_steps, client_id=f"{cfg.run_id}_server", is_training=False, start_time=start_time
             )
 
             trainer = SFTTrainer(

@@ -1,22 +1,11 @@
+defaults:
+  - defaults.yaml
+
 project: "federated-flwr"
-# run_id: "b0jg9cbd3"
+run_id: ""
 checkpoint_path: ""
 resume: False
 start_round: 0
-model:
-  name: "EleutherAI/pythia-125m"
-  tokenizer: "EleutherAI/pythia-125m"
-  instruction_token: False
-
-lora:
-  r: 8
-  alpha: 8
-  dropout: 0.1
-  target_modules: null
-  bias: "none"
-
-dataset:
-  path: "/nfs-share/pa511/new_work/data/amazonqa"
 
 training:
   per_device_train_batch_size: 2
@@ -24,26 +13,15 @@ training:
   logging_steps: 10
   max_seq_length: 2048
   num_train_epochs: 1
-  eval_strategy: "epoch"
+  eval_strategy: "steps"
   eval_on_start: True
   report_to: "none"
   save_strategy: "no"
   dataset_text_field: "text"
-  warmup_ratio: 0.1
+  warmup_ratio: 0.05
   batch_eval_metrics: True
-  learning_rate: 1e-2
+  learning_rate: 5E-04
 
 evaluation:
   output_dir: "./results"
   per_device_eval_batch_size: 8
-
-simulation:
-  num_clients: 4
-  num_rounds: 60 # allways multiple of eqivalent_cent_epochs
-  warmup_ratio: 0.1
-  cooloff_ratio: 0.1
-  eqivalent_cent_epochs: 4
-  use_lora: True
-  client_resources:
-    num_cpus: 8
-    num_gpus: 1.0

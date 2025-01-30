@@ -1,0 +1,25 @@
+#!/bin/bash
+
+TEMPLATE_FILE="/nfs-share/pa511/new_work/scripts/slurm_fl_template.mauao"
+
+PARAMS_LIST=(
+    "training.per_device_train_batch_size=32 simulation.use_lora=True"
+    # Add more parameter strings here
+)
+
+for PARAMS in "${PARAMS_LIST[@]}"; do
+    JOB_SCRIPT=$(mktemp /tmp/job_script.XXXXXX.sh)
+    cp $TEMPLATE_FILE $JOB_SCRIPT
+
+    # Update the dependency with the last job ID
+    if [ -n "$LAST_JOB_ID" ]; then
+        sed -i "s/#SBATCH --dependency=afterany:[0-9]*/#SBATCH --dependency=afterany:$LAST_JOB_ID/" $JOB_SCRIPT
+    fi
+
+    # Set the parameters
+    sed -i "s|CURRENT_PARAMS=.*|CURRENT_PARAMS=\"$PARAMS dataset.path=/nfs-share/pa511/new_work/data/pubmedqa\"|" $JOB_SCRIPT
+
+    # Submit the job and capture the job ID
+    LAST_JOB_ID=$(sbatch $JOB_SCRIPT | awk '{print $4}')
+    rm $JOB_SCRIPT
+done

@@ -8,7 +8,7 @@ def formatting_prompts_func(example, key1, key2):
         output_texts = []
         # Constructing a standard Alpaca (https://github.com/tatsu-lab/stanford_alpaca#data-release) prompt
         for i in range(len(example)):
-            text = "~ins~ "+example[i][key1]+"~res~ "+example[i][key2]
+            text = f"\n\n<|ins|>:\n{example[i][key1]}\n\n<|res|>\n{example[i][key2]}"
             # o = {key1: example[i][key1], key2: example[i][key2], 'text': text}
             o = {'text': text}
             output_texts.append(o)
@@ -21,7 +21,8 @@ def generate_datasets_with_merge(
     save_dir: str,
     x: float,
     col1: str,
-    col2: str
+    col2: str,
+    frmt = True
 ) -> Tuple[List[dict], List[dict], List[dict]]:
 
     target_name = "data"
@@ -35,10 +36,12 @@ def generate_datasets_with_merge(
     
     # Calculate sample size
     sample_size = int(x * len(dataset))
+    format_dataset = dataset
     
     # Split into non-member set and rest of the dataset (train candidate set)
-    # format_dataset = formatting_prompts_func(dataset, col1, col2)
-    format_dataset = dataset
+    if frmt:
+        format_dataset = formatting_prompts_func(dataset, col1, col2)
+        
     non_member_set = format_dataset[:sample_size]
     train_candidate_set = format_dataset[sample_size:]
     
@@ -79,13 +82,13 @@ def generate_datasets_with_merge(
     return non_member_set, train_set, member_set
 
 # Usage example:
-target_name = "/nfs-share/pa511/new_work/data/amazonqa/raw/data_train_filtered.json"
-save_dir = "data/amazonqa"
-# target_name = "/nfs-share/pa511/new_work/data/aus_qa/raw/train_de.json"
-# save_dir = "data/aus_qa/raw"
-col1 = "question"
-col2 = "answer"
+target_name = "/nfs-share/pa511/new_work/data/triviaqa/raw/data_train_filtered.json"
+save_dir = "data/triviaqa"
+# target_name = "/nfs-share/pa511/new_work/data/medalpaca/raw/train_de.json"
+# save_dir = "data/medalpaca/raw"
+col1 = "instruction"
+col2 = "output"
 
 x = 0.1 # 10% sampling
-generate_datasets_with_merge(target_name, save_dir,x, col1, col2)
+generate_datasets_with_merge(target_name, save_dir,x, col1, col2, frmt=False)
 # /nfs-share/pa511/llm_memorisation/datasets_our/medical_dataset/deduplicated_medical_meadow_flashcards/deduplicated_medical_meadow_flashcards.json

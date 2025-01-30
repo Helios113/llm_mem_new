@@ -1,0 +1,26 @@
+simulation:
+  num_clients: 4
+  num_rounds: 40 # allways multiple of eqivalent_cent_epochs
+  warmup_ratio: 0.05
+  cooloff_ratio: 0.1
+  eqivalent_cent_epochs: 4
+  use_lora: True
+  client_resources:
+    num_cpus: 8
+    num_gpus: 1.0
+num_loggings: 120
+dataset:
+  path: "/nfs-share/pa511/new_work/data/pubmedqa"
+
+
+lora:
+  r: 8
+  alpha: 8
+  dropout: 0.1
+  target_modules: null
+  bias: "none"
+
+model:
+  name: "EleutherAI/pythia-125m"
+  tokenizer: "EleutherAI/pythia-125m"
+  instruction_token: False

@@ -1,36 +1,24 @@
+defaults:
+  - defaults.yaml
+
 project: "federated-flwr"
-# run_id: "b0jg9cbd3"
+run_id: ""
 checkpoint_path: ""
 resume: False
-
-model:
-  name: "EleutherAI/pythia-125m"
-  tokenizer: "EleutherAI/pythia-125m"
-  instruction_token: False
-
-lora:
-  r: 8
-  alpha: 8
-  dropout: 0.1
-  target_modules: null
-  bias: "none"
-
-dataset:
-  path: "/nfs-share/pa511/new_work/data/pubmedqa"
 
 training:
   per_device_train_batch_size: 8
   logging_dir: "./logs"
   logging_steps: 10
   max_seq_length: 512
-  max_steps: 75420
+  num_train_epochs: 4
   evaluation_strategy: "steps"
   eval_on_start: True
   eval_steps: 1000 # Evaluate every 10 steps
   report_to: "none"
   dataset_text_field: "text"
   batch_eval_metrics: True
-  learning_rate: 1e-3
+  learning_rate: 5E-04
   save_strategy : "best"
   load_best_model_at_end: True
   save_total_limit: 2
@@ -39,14 +27,5 @@ training:
 
 evaluation:
   output_dir: "./results"
-  per_device_eval_batch_size: 8
+  per_device_eval_batch_size: $training.per_device_train_batch_size
 
-simulation:
-  num_clients: 4
-  num_rounds: 50
-  warmup_ratio: 0.1
-  cooloff_ratio: 0.1
-  use_lora: True
-  client_resources:
-    num_cpus: 8
-    num_gpus: 1.0

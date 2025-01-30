@@ -130,7 +130,18 @@ class GlobalStepCallback(TrainerCallback):
                 key = "train/" + i
                 commit_dict[key] = state.log_history[-1][i]
         commit_dict["train/elapsed_time"] = (datetime.datetime.now() - self.start_time).total_seconds() / 60.0
-        wandb.log(data=commit_dict, step=cur_step)
+        
+        print("Log info:")
+        print("elapsed_steps", self.elapsed_steps)
+        print("state.log_history[-1]['step']", state.log_history[-1]["step"])
+        print("cur_step", cur_step)
+        try:
+            wandb.log(data=commit_dict, step=cur_step)
+        except Exception as e:
+            print(f"Error logging to wandb: {e}")
+            print("elapsed_steps", self.elapsed_steps)
+            print("state.log_history[-1]['step']", state.log_history[-1]["step"])
+            print("cur_step", cur_step)
         self.log_data["train"].append({"cur_step": self.elapsed_steps + state.log_history[-1]["step"] ,**commit_dict})
 
     def on_evaluate(self, args, state, control, logs=None, **kwargs):
@@ -147,7 +158,13 @@ class GlobalStepCallback(TrainerCallback):
                 key = "eval/" + i
                 commit_dict[key] = state.log_history[-1][i]
         commit_dict["train/elapsed_time"] = (datetime.datetime.now() - self.start_time).total_seconds() / 60.0
-        wandb.log(data=commit_dict, step=cur_step)
+        try:    
+            wandb.log(data=commit_dict, step=cur_step)
+        except Exception as e:
+            print(f"Error logging to wandb: {e}")
+            print("elapsed_steps", self.elapsed_steps)
+            print("state.log_history[-1]['step']", state.log_history[-1]["step"])
+            print("cur_step", cur_step)
         self.log_data["eval"].append({"cur_step": self.elapsed_steps + state.log_history[-1]["step"], **commit_dict})
 
     def save_logs(self, log_dir):

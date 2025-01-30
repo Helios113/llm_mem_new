@@ -24,9 +24,9 @@ def remove_long_samples(dataset_path: str, tokenizer_name: str, max_seq_length: 
     print(f"Filtered dataset saved to {output_path}")
 
 if __name__ == "__main__":
-    dataset_path = "/nfs-share/pa511/new_work/data/amazonqa/raw/data_train.json"
+    dataset_path = "/nfs-share/pa511/new_work/data/triviaqa/raw/data_train.json"
     tokenizer_name = "EleutherAI/pythia-125M"
     max_seq_length = 2048
     threshold = 512
-    output_path = "/nfs-share/pa511/new_work/data/amazonqa/raw/data_train_filtered.json"
+    output_path = "/nfs-share/pa511/new_work/data/triviaqa/raw/data_train_filtered.json"
     remove_long_samples(dataset_path, tokenizer_name, max_seq_length, threshold, output_path)

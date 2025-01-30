@@ -18,8 +18,8 @@ def compute_sft_trainer_steps(cfg, train_set_path):
     cleint_ds_remainder = client_round_data_size % num_unique_rounds
     total_loss = cleint_ds_remainder * cfg.simulation.num_clients + client_remainder
     print(
-        "Total centralised equivalnet data size:",
-        client_round_data_size * num_rounds * cfg.simulation.num_clients,
+        "Single Epoch Steps:",
+        client_round_data_size * num_unique_rounds * cfg.simulation.num_clients,
     )
     print("Total lossed elements:", total_loss)
 
