@@ -31,7 +31,8 @@ def upload_folder_to_s3(
         for root, dirs, files in os.walk(folder_path):
             for file in files:
                 file_path = os.path.join(root, file)
-                s3_key = os.path.join(s3_prefix, file)
+                relative_path = os.path.relpath(file_path, folder_path)
+                s3_key = os.path.join(s3_prefix, relative_path)
                 with tqdm(total=os.path.getsize(file_path), unit='B', unit_scale=True, desc=file) as pbar:
                     s3_client.upload_file(
                         file_path, bucket_name, s3_key, Callback=ProgressPercentage(file_path, pbar)
@@ -42,14 +43,14 @@ def upload_folder_to_s3(
 
 if __name__ == "__main__":
     s3_endpoint_url = "http://128.232.115.19:9000"
-    s3_prefix = "checkpoints"
+    s3_prefix = "data"
     bucket_name = "memorisation"
 
-    s3_folder = "pythia-125m_pubmedqa_lora_dfv3h5ya"
+    s3_folder = "amazonqa"
     folder_path = (
-        "/nfs-share/pa511/new_work/outputs/2025-01-28/14-33-26/checkpoint-40"
+        "/nfs-share/pa511/new_work/data/amazonqa"
     )
-
+    print(s3_folder)
     upload_folder_to_s3(
         folder_path, bucket_name, s3_endpoint_url, os.path.join(s3_prefix, s3_folder)
     )
